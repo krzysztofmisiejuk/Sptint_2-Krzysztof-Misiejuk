@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+      "target": "ES2019",
+      "module": "NodeNext",
+      "rootDir": "./backend",
+      "outDir": "dist",
+      "strict": true,
+      "esModuleInterop": true
+    },
+    "include": ["backend"] 
+  }
