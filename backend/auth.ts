@@ -77,7 +77,7 @@ export const getAuthenticatedUser = async (
 		if (!userId) return null; // Brak tokena lub nieprawidłowy token
 		const allUsers = await getData<User>('users.json');
 		const user = allUsers.find((u) => u.id === userId);
-		return user || null; 
+		return user || null;
 	} catch (error) {
 		console.error('Error in getAuthenticatedUser:', error);
 		return null; // W przypadku błędu zwracamy null
@@ -217,10 +217,8 @@ export const refreshToken = async (
 			return;
 		}
 		res.setHeader('Set-Cookie', [
-			`token=${token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`, 
+			`token=${token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
 		]);
-		res.statusCode = 200;
-		res.end(JSON.stringify({ message: 'Token refreshed' }));
 	} catch (error) {
 		errorHandler(req, res, 500, 'Internal server error');
 	}

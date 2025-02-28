@@ -192,8 +192,6 @@ export const refreshToken = async (req, res) => {
         res.setHeader('Set-Cookie', [
             `token=${token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
         ]);
-        res.statusCode = 200;
-        res.end(JSON.stringify({ message: 'Token refreshed' }));
     }
     catch (error) {
         errorHandler(req, res, 500, 'Internal server error');

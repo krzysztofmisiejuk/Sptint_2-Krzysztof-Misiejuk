@@ -398,9 +398,6 @@ function setupSSE() {
 		showNotification(
 			`SSE: ${msg.event} - Car ID: ${msg.carId}, Buyer ID: ${msg.buyerId}`
 		);
-		evtSource.onerror = (error) => {
-			evtSource.close();
-		};
 	};
 }
 

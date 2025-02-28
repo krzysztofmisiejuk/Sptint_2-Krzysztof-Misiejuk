@@ -38,7 +38,7 @@ export const getProfile = async (req, res) => {
             role: item.role,
             balance: item.balance,
         };
-        refreshToken(req, res);
+        await refreshToken(req, res);
         res.statusCode = 200;
         res.end(JSON.stringify(currentUser));
     }
@@ -235,5 +235,6 @@ export const sse = (req, res) => {
     sseClients.push(res);
     req.on('close', () => {
         sseClients = sseClients.filter((client) => client !== res);
+        res.end();
     });
 };

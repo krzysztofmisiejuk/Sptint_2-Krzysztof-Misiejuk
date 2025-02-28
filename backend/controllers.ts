@@ -61,7 +61,7 @@ export const getProfile = async (
 			role: item.role,
 			balance: item.balance,
 		};
-		refreshToken(req, res);
+		await refreshToken(req, res);
 		res.statusCode = 200;
 		res.end(JSON.stringify(currentUser));
 	} catch (error) {
@@ -294,5 +294,7 @@ export const sse = (req: IncomingMessage, res: ServerResponse) => {
 
 	req.on('close', () => {
 		sseClients = sseClients.filter((client) => client !== res);
+		res.end()
 	});
 };
+
