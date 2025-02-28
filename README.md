@@ -11,6 +11,7 @@ Projekt umożliwia rejestrację, logowanie, zarządzanie użytkownikami i samoch
 3. Frontend znajduje się w katalogu `frontend/` – dostęp do plików statycznych przez endpoint `/static/`.
 
 ## Uwaga
+- plik .env załączony w celach testowych
 
 Konto administratora jest predefiniowane w `db/users.json`:
 
