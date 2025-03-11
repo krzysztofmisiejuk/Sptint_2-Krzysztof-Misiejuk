@@ -12,7 +12,7 @@ export interface Car {
 	id: string;
 	model: string;
 	price: number;
-	ownerId: string;
+	owner_id: string;
 }
 
 export interface Profile {
@@ -55,4 +55,4 @@ export interface Register {
 }
 
 
-export type Middelware = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
+export type Middelware = (req: IncomingMessage, res: ServerResponse) => void | Promise<void> 

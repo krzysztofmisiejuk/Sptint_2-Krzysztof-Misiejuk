@@ -3,7 +3,7 @@ import { IncomingMessage, ServerResponse } from 'http';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { User } from './types.js';
-import { getData, sendData } from './data.js';
+import { getData, pool, sendData } from './data.js';
 import { errorHandler } from './utils.js';
 dotenv.config();
 
@@ -68,20 +68,22 @@ export function getUserFromToken(token: string): string | null {
 // 	}
 // };
 export const getAuthenticatedUser = async (
-	req: IncomingMessage,
-	res: ServerResponse
+    req: IncomingMessage,
+    res: ServerResponse
 ): Promise<User | null> => {
-	try {
-		const cookie = parseCookies(req);
-		const userId = getUserFromToken(cookie.token);
-		if (!userId) return null; // Brak tokena lub nieprawidłowy token
-		const allUsers = await getData<User>('users.json');
-		const user = allUsers.find((u) => u.id === userId);
-		return user || null;
-	} catch (error) {
-		console.error('Error in getAuthenticatedUser:', error);
-		return null; // W przypadku błędu zwracamy null
-	}
+    try {
+        const cookie = parseCookies(req);
+        const userId = getUserFromToken(cookie.token);
+        if (!userId) return null;
+        const { rows } = await pool.query(
+            'SELECT * FROM public.users WHERE id = $1',
+            [userId]
+        );
+        return rows[0] || null;
+    } catch (error) {
+        console.error('Error in getAuthenticatedUser:', error);
+        return null;
+    }
 };
 export function parseCookies(req: IncomingMessage): Record<string, string> {
 	let list: Record<string, string> = {};
@@ -100,42 +102,86 @@ export function parseCookies(req: IncomingMessage): Record<string, string> {
 	return list;
 }
 
-export const register = (req: IncomingMessage, res: ServerResponse): void => {
+// export const register = (req: IncomingMessage, res: ServerResponse): void => { 
+// 	let body = '';
+// 	req.on('data', (chunk) => {
+// 		body += chunk.toString();
+// 	});
+// 	req.on('end', async () => {
+// 		try {
+// 			const allUsers = await getData<User>('users.json');
+// 			const newUserData = JSON.parse(body);
+// 			const isUserExist = allUsers.some(
+// 				({ username }) => username === newUserData.username
+// 			);
+
+// 			if (isUserExist) {
+// 				res.statusCode = 409;
+// 				res.end(JSON.stringify({ message: 'User already exists' }));
+// 				return;
+// 			}
+
+// 			const newUser: User = {
+// 				id: `user${(allUsers.length + 1).toString().padStart(3, '0')}`,
+// 				...newUserData,
+// 				role: 'user',
+// 				balance: 1000,
+// 			};
+// 			allUsers.push(newUser);
+// 			await sendData('users.json', allUsers);
+// 			res.statusCode = 201;
+// 			res.end(JSON.stringify({ message: 'Added new user' }));
+// 		} catch (error) {
+// 			res.statusCode = 400;
+// 			res.end(JSON.stringify({ error: 'Invalid data' }));
+// 		}
+// 	});
+// };
+
+export const register = (req: IncomingMessage, res: ServerResponse) => {
 	let body = '';
 	req.on('data', (chunk) => {
-		body += chunk.toString();
+	  body += chunk.toString();
 	});
 	req.on('end', async () => {
-		try {
-			const allUsers = await getData<User>('users.json');
-			const newUserData = JSON.parse(body);
-			const isUserExist = allUsers.some(
-				({ username }) => username === newUserData.username
-			);
-
-			if (isUserExist) {
-				res.statusCode = 409;
-				res.end(JSON.stringify({ message: 'User already exists' }));
-				return;
-			}
-
-			const newUser: User = {
-				id: `user${(allUsers.length + 1).toString().padStart(3, '0')}`,
-				...newUserData,
-				role: 'user',
-				balance: 1000,
-			};
-			allUsers.push(newUser);
-			await sendData('users.json', allUsers);
-			res.statusCode = 201;
-			res.end(JSON.stringify({ message: 'Added new user' }));
-		} catch (error) {
-			res.statusCode = 400;
-			res.end(JSON.stringify({ error: 'Invalid data' }));
+	  try {
+		const newUserData = JSON.parse(body);
+  
+		// Sprawdzenie, czy użytkownik już istnieje w bazie danych
+		const { rows: existingUsers } = await pool.query(
+		  'SELECT * FROM public.users WHERE username = $1',
+		  [newUserData.username]
+		);
+		if (existingUsers.length > 0) {
+		  res.statusCode = 409;
+		  res.end(JSON.stringify({ message: 'User already exists' }));
+		  return;
 		}
+  
+		// Wstawienie nowego użytkownika do bazy danych
+		const { rows } = await pool.query(
+		  'INSERT INTO public.users (username, password, role, balance) VALUES ($1, $2, $3, $4) RETURNING id',
+		  [newUserData.username, newUserData.password, 'user', 1000]
+		);
+		const newUserId = rows[0].id;
+  
+		const newUser = {
+		  id: `user${newUserId.toString().padStart(3, '0')}`,
+		  username: newUserData.username,
+		  password: newUserData.password,
+		  role: 'user',
+		  balance: 1000,
+		};
+  
+		res.statusCode = 201;
+		res.end(JSON.stringify({ message: 'Added new user', user: newUser }));
+	  } catch (error) {
+		console.error('Registration error:', error);
+		res.statusCode = 400;
+		res.end(JSON.stringify({ error: 'Invalid data' }));
+	  }
 	});
-};
-
+  };
 export const login = (req: IncomingMessage, res: ServerResponse): void => {
 	let body = '';
 	req.on('data', (chunk) => {
@@ -143,9 +189,10 @@ export const login = (req: IncomingMessage, res: ServerResponse): void => {
 	});
 	req.on('end', async () => {
 		try {
-			const allUsers = await getData<User>('users.json');
+			const { rows } = await pool.query('SELECT * FROM public.users');
+			const users: User[] = rows;
 			const loginData = JSON.parse(body);
-			const isUserExist = allUsers.find(
+			const isUserExist = users.find(
 				({ username, password }) =>
 					username === loginData.username && password === loginData.password
 			);
@@ -192,34 +239,40 @@ export const logout = (req: IncomingMessage, res: ServerResponse): void => {
 };
 
 export const refreshToken = async (
-	req: IncomingMessage,
-	res: ServerResponse
+    req: IncomingMessage,
+    res: ServerResponse
 ): Promise<void> => {
-	const cookies = parseCookies(req);
-	const token = cookies.token;
+    const cookies = parseCookies(req);
+    const token = cookies.token;
 
-	if (!token) {
-		errorHandler(req, res, 401, 'No token provided');
-		return;
-	}
+    if (!token) {
+        errorHandler(req, res, 401, 'No token provided');
+        return;
+    }
 
-	const userId = getUserFromToken(token);
-	if (!userId) {
-		errorHandler(req, res, 401, 'Invalid token');
-		return;
-	}
+    const userId = getUserFromToken(token);
+    if (!userId) {
+        errorHandler(req, res, 401, 'Invalid token');
+        return;
+    }
 
-	try {
-		const allUsers = await getData<User>('users.json');
-		const user = allUsers.find((u) => u.id === userId);
-		if (!user) {
-			errorHandler(req, res, 404, 'User not found');
-			return;
-		}
-		res.setHeader('Set-Cookie', [
-			`token=${token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
-		]);
-	} catch (error) {
-		errorHandler(req, res, 500, 'Internal server error');
-	}
+    try {
+        const { rows } = await pool.query(
+            'SELECT * FROM public.users WHERE id = $1',
+            [userId]
+        );
+        const user = rows[0];
+        if (!user) {
+            errorHandler(req, res, 404, 'User not found');
+            return;
+        }
+        res.setHeader('Set-Cookie', [
+            `token=${token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
+        ]);
+        // Kończymy odpowiedź, jeśli to samodzielny endpoint
+        res.statusCode = 200;
+        res.end(JSON.stringify({ message: 'Token refreshed' }));
+    } catch (error) {
+        errorHandler(req, res, 500, 'Internal server error');
+    }
 };

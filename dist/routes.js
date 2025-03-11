@@ -67,7 +67,6 @@ export const handleRoutes = (req, res) => {
             return errorHandler(req, res, 405, 'Method not allowed');
         }
         if ((_d = req.url) === null || _d === void 0 ? void 0 : _d.match(/\/user\/edit\/(user|admin)\d+/)) {
-            //ok
             if (req.method === 'PUT') {
                 return authCurrentUser(req, res, id, (req, res) => editUsers(req, res, id));
             }

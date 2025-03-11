@@ -62,13 +62,22 @@ function renderNav() {
 
 async function checkAuth() {
 	try {
-		const res = await fetch(`http://localhost:3000/profile`);
+		const res = await fetch(`http://localhost:3000/profile`, {
+			credentials: 'include', // Wysłanie ciasteczek
+		});
 		if (res.status === 200) {
 			const data = await res.json();
 			currentUser = data;
+		} else if (res.status === 401 || res.status === 404) {
+			currentUser = null;
+			console.log('Użytkownik nie jest zalogowany');
+		} else {
+			console.log('Status:', res.status);
+			currentUser = null;
 		}
 	} catch (error) {
 		console.error('Błąd podczas pobierania danych użytkownika:', error);
+		currentUser = null;
 	}
 	renderNav();
 }
@@ -93,16 +102,20 @@ function showView(viewId) {
  */
 async function loadProfile() {
 	let profile = currentUser;
-	if (profile) {
-		document.getElementById(
-			'profile-info'
-		).innerText = `Username: ${profile.username}\nSaldo: ${profile.balance}`;
+	if (!profile) {
+		document.getElementById('profile-info').innerText = 'Nie jesteś zalogowany';
+		renderNav();
+		return;
 	}
+	document.getElementById(
+		'profile-info'
+	).innerText = `Username: ${profile.username}\nSaldo: ${profile.balance}`;
 	if (profile.role === 'admin') {
 		await loadUsersList();
-	} else if (profile.role !== 'admin') {
-		if (document.querySelectorAll('#user-item')) {
-			document.querySelectorAll('#user-item').forEach((item) => item.remove());
+	} else {
+		const userItems = document.querySelectorAll('#user-item');
+		if (userItems.length > 0) {
+			userItems.forEach((item) => item.remove());
 		}
 	}
 	renderNav();
@@ -125,7 +138,9 @@ async function loadCars() {
                      <strong>ID:</strong> ${car.id} |
                      <strong>Model:</strong> ${car.model} |
                      <strong>Cena:</strong> ${car.price} |
-                     <strong>Właściciel:</strong> ${car.ownerId}
+                     <strong>Właściciel:</strong> ${
+												car.owner_id ? car.owner_id : ''
+											}
                    </div>`;
 				});
 			}

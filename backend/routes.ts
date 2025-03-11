@@ -27,7 +27,7 @@ export const handleRoutes = (req: IncomingMessage, res: ServerResponse) => {
 		if (req.url === '/users') {
 			if (req.method === 'GET')
 				return loginAuth(req, res, (req, res) => adminAuth(req, res, getUsers));
-			return errorHandler(req, res, 405, 'Method not allowed'); 
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url?.match(/^\/users\/\d+$/)) {
@@ -39,14 +39,14 @@ export const handleRoutes = (req: IncomingMessage, res: ServerResponse) => {
 			if (req.method === 'DELETE') {
 				return adminAuth(req, res, (req, res) =>
 					deleteData(req, res, 'users.json', 'User not found', id)
-				); 
+				);
 			}
 			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/cars') {
-			if (req.method === 'GET') return loginAuth(req, res, getCars); 
-			if (req.method === 'POST') return loginAuth(req, res, addNewCar); 
+			if (req.method === 'GET') return loginAuth(req, res, getCars);
+			if (req.method === 'POST') return loginAuth(req, res, addNewCar);
 			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
@@ -55,47 +55,46 @@ export const handleRoutes = (req: IncomingMessage, res: ServerResponse) => {
 				return loginAuth(req, res, (req, res) =>
 					findSingleItem(req, res, 'cars.json', id)
 				);
-			} 
+			}
 			if (req.method === 'DELETE') {
 				return adminAuth(req, res, (req, res) =>
 					deleteData(req, res, 'cars.json', 'Car not found', id)
 				);
-			} 
+			}
 			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/profile') {
-			if (req.method === 'GET') return getProfile(req, res); 
-			return errorHandler(req, res, 405, 'Method not allowed');
+			if (req.method === 'GET') return getProfile(req, res);
+			 return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/register') {
 			if (req.method === 'POST') return register(req, res);
-			return errorHandler(req, res, 405, 'Method not allowed'); 
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/login') {
 			if (req.method === 'POST') return login(req, res);
-			return errorHandler(req, res, 405, 'Method not allowed'); 
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/logout') {
 			if (req.method === 'GET') return logout(req, res);
-			return errorHandler(req, res, 405, 'Method not allowed'); 
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/sse') {
 			if (req.method === 'GET') return sse(req, res);
-			return errorHandler(req, res, 405, 'Method not allowed'); 
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/users/edit') {
 			if (req.method === 'PUT') return loginAuth(req, res, editCurrentUser);
-			return errorHandler(req, res, 405, 'Method not allowed'); 
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url?.match(/\/user\/edit\/(user|admin)\d+/)) {
-			//ok
 			if (req.method === 'PUT') {
 				return authCurrentUser(req, res, id, (req, res) =>
 					editUsers(req, res, id)
@@ -110,7 +109,7 @@ export const handleRoutes = (req: IncomingMessage, res: ServerResponse) => {
 		}
 
 		if (req.url?.match(/^\/fund\/\d+$/)) {
-			if (req.method === 'GET') return hack(req, res); 
+			if (req.method === 'GET') return hack(req, res);
 			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 

@@ -1,12 +1,12 @@
-import { transferData, errorHandler, findByIndex } from './utils.js';
-import { getData, sendData } from './data.js';
-import { getUserFromToken, parseCookies, refreshToken } from './auth.js';
+import { transferData, errorHandler } from './utils.js';
+import { pool } from './data.js';
+import { getUserFromToken, parseCookies } from './auth.js';
 export let sseClients = [];
 export const getUsers = async (req, res) => {
     try {
-        const usersData = await getData('users.json');
+        const { rows: users } = await pool.query('SELECT * FROM public.users');
         res.statusCode = 200;
-        res.end(JSON.stringify(usersData));
+        res.end(JSON.stringify(users));
     }
     catch (error) {
         errorHandler(req, res, 500, 'Internal server error');
@@ -14,9 +14,9 @@ export const getUsers = async (req, res) => {
 };
 export const getCars = async (req, res) => {
     try {
-        const carsData = await getData('cars.json');
+        const { rows: cars } = await pool.query('SELECT * FROM public.cars');
         res.statusCode = 200;
-        res.end(JSON.stringify(carsData));
+        res.end(JSON.stringify(cars));
     }
     catch (error) {
         errorHandler(req, res, 500, 'Internal server error');
@@ -25,20 +25,26 @@ export const getCars = async (req, res) => {
 export const getProfile = async (req, res) => {
     const cookie = parseCookies(req);
     const decryptedUserId = getUserFromToken(cookie.token);
+    if (!decryptedUserId) {
+        errorHandler(req, res, 401, 'Unauthorized');
+        return;
+    }
     try {
-        const allUsers = await getData('users.json');
-        const { item, index: currentUserIndex } = await findByIndex(allUsers, decryptedUserId);
-        if (currentUserIndex === -1) {
-            res.statusCode = 401;
-            res.end(JSON.stringify({ message: 'User is not logged in' }));
+        const { rows } = await pool.query('SELECT * FROM public.users WHERE id = $1', [decryptedUserId]);
+        const user = rows[0];
+        if (!user) {
+            errorHandler(req, res, 404, 'User not found');
             return;
         }
         const currentUser = {
-            username: item.username,
-            role: item.role,
-            balance: item.balance,
+            username: user.username,
+            role: user.role,
+            balance: user.balance,
         };
-        await refreshToken(req, res);
+        const cookies = parseCookies(req);
+        res.setHeader('Set-Cookie', [
+            `token=${cookies.token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
+        ]);
         res.statusCode = 200;
         res.end(JSON.stringify(currentUser));
     }
@@ -48,10 +54,9 @@ export const getProfile = async (req, res) => {
 };
 export const findSingleUser = async (req, res, id) => {
     try {
-        const allUsers = await getData('users.json');
-        const formattedId = id === null || id === void 0 ? void 0 : id.padStart(3, '0');
-        const user = allUsers.find((user) => user.id.slice(-3) === formattedId);
-        if (!user) {
+        const formattedId = `user${id === null || id === void 0 ? void 0 : id.padStart(3, '0')}`;
+        const { rows: user } = await pool.query('SELECT * FROM public.users WHERE id = $1', [formattedId]);
+        if (user.length < 1) {
             errorHandler(req, res, 404, 'User not found');
             return;
         }
@@ -69,24 +74,19 @@ export const addNewCar = async (req, res) => {
     });
     req.on('end', async () => {
         try {
-            const allCars = await getData('cars.json');
+            const { rows: cars } = await pool.query('SELECT * FROM public.cars');
             const newCarData = JSON.parse(body);
+            console.log(newCarData);
             if (!newCarData.model || !newCarData.price) {
                 errorHandler(req, res, 400, 'Model and price are required');
                 return;
             }
-            const isCarExist = allCars.findIndex((car) => car.model === newCarData.model);
+            const isCarExist = cars.findIndex((car) => car.model === newCarData.model);
             if (isCarExist !== -1) {
                 errorHandler(req, res, 409, 'Car already exists');
                 return;
             }
-            const newCar = {
-                id: `car${(allCars.length + 1).toString().padStart(3, '0')}`,
-                ...newCarData,
-                ownerId: '',
-            };
-            allCars.push(newCar);
-            await sendData('cars.json', allCars);
+            await pool.query('INSERT INTO public.cars (model, price) VALUES($1, $2)', [newCarData.model, newCarData.price]);
             res.statusCode = 201;
             res.end(JSON.stringify({ message: 'Added new car' }));
         }
@@ -102,22 +102,26 @@ export const editCurrentUser = (req, res) => {
     });
     req.on('end', async () => {
         try {
-            const editedUserData = JSON.parse(body);
             const cookie = parseCookies(req);
             const decryptedUserId = getUserFromToken(cookie.token);
-            const allUsers = await getData('users.json');
-            const { item: userToEdit, index: isUserIndex } = await findByIndex(allUsers, decryptedUserId);
-            if (isUserIndex === -1) {
+            const editedData = JSON.parse(body);
+            const { rows } = await pool.query('SELECT * FROM public.users');
+            const allUsers = rows;
+            const isUserExist = allUsers.findIndex((user) => {
+                return user.id === decryptedUserId;
+            });
+            if (isUserExist === -1) {
                 errorHandler(req, res, 404, 'User not found');
                 return;
             }
-            allUsers[isUserIndex] = {
-                ...userToEdit,
-                ...editedUserData,
-            };
-            await sendData('users.json', allUsers);
+            await pool.query('UPDATE public.users SET username = $1, password = $2, role = $3 WHERE id = $4', [
+                editedData.username,
+                editedData.password,
+                editedData.role,
+                decryptedUserId,
+            ]);
             res.statusCode = 200;
-            res.end(JSON.stringify(allUsers[isUserIndex]));
+            res.end(JSON.stringify({ message: 'Editing completed successfully' }));
         }
         catch (error) {
             errorHandler(req, res, 500, 'Internal server error');
@@ -131,23 +135,22 @@ export const editUsers = async (req, res, id) => {
     });
     req.on('end', async () => {
         try {
-            const allUsers = await getData('users.json');
+            const { rows: users } = await pool.query('SELECT * FROM public.users');
             const editedUser = JSON.parse(body);
-            const isUserIndex = allUsers.findIndex((user) => user.id === id);
+            const isUserIndex = users.findIndex((user) => user.id === id);
             if (isUserIndex === -1) {
                 errorHandler(req, res, 404, 'User not found');
                 return;
             }
-            allUsers[isUserIndex] = {
-                ...editedUser,
-                balance: Number(editedUser.balance),
-                id: editedUser.role === 'admin'
-                    ? 'admin' + (id === null || id === void 0 ? void 0 : id.slice(-3))
-                    : 'user' + (id === null || id === void 0 ? void 0 : id.slice(-3)),
-            };
-            await sendData('users.json', allUsers);
+            await pool.query('UPDATE public.users SET username = $1, password = $2, role = $3, balance = $4 WHERE id = $5', [
+                editedUser.username,
+                editedUser.password,
+                editedUser.role,
+                editedUser.balance,
+                id,
+            ]);
             res.statusCode = 200;
-            res.end(JSON.stringify('edited'));
+            res.end(JSON.stringify({ message: 'Editing completed successfully' }));
         }
         catch (error) {
             errorHandler(req, res, 500, 'Internal server error');
@@ -162,37 +165,43 @@ export const buyCar = async (req, res) => {
     req.on('end', async () => {
         try {
             const bougthCar = JSON.parse(body);
+            const { rows: u } = await pool.query('SELECT * FROM public.users');
+            const { rows: c } = await pool.query('SELECT * FROM public.cars');
+            console.log(bougthCar);
+            const users = u;
+            const cars = c;
             if (!bougthCar.username || !bougthCar.carId) {
                 errorHandler(req, res, 400, 'Username and carId are required');
                 return;
             }
-            const allCars = await getData('cars.json');
-            const allUsers = await getData('users.json');
-            const findOwnerIndex = allUsers.findIndex((user) => user.username === bougthCar.username);
-            const isCarIndex = allCars.findIndex((car) => {
+            const findOwnerIndex = users.findIndex((user) => user.username === bougthCar.username);
+            const isCarIndex = cars.findIndex((car) => {
                 return car.id === bougthCar.carId;
             });
             if (isCarIndex === -1) {
                 errorHandler(req, res, 404, 'Car not found');
                 return;
             }
-            if (allUsers[findOwnerIndex].balance < allCars[isCarIndex].price) {
+            if (users[+findOwnerIndex].balance < +cars[isCarIndex].price) {
                 errorHandler(req, res, 403, 'The car is too expensive');
                 return;
             }
-            allUsers[findOwnerIndex] = {
-                ...allUsers[findOwnerIndex],
-                balance: allUsers[findOwnerIndex].balance - allCars[isCarIndex].price,
+            users[findOwnerIndex] = {
+                ...users[findOwnerIndex],
+                balance: users[findOwnerIndex].balance - cars[isCarIndex].price,
             };
-            allCars[isCarIndex] = {
-                ...allCars[isCarIndex],
-                ownerId: allUsers[findOwnerIndex].id,
+            cars[isCarIndex] = {
+                ...cars[isCarIndex],
+                owner_id: users[findOwnerIndex].id,
             };
-            transferData(allCars[isCarIndex].id, allCars[isCarIndex].ownerId, sseClients);
-            await sendData('cars.json', allCars);
-            await sendData('users.json', allUsers);
+            transferData(cars[isCarIndex].id, cars[isCarIndex].owner_id, sseClients);
+            await pool.query('UPDATE public.users SET balance = $1 WHERE username = $2', [users[findOwnerIndex].balance, bougthCar.username]);
+            await pool.query('UPDATE public.cars SET owner_Id = $1  WHERE id = $2', [
+                cars[isCarIndex].owner_id,
+                bougthCar.carId,
+            ]);
             res.statusCode = 200;
-            res.end(JSON.stringify(allCars[isCarIndex]));
+            res.end(JSON.stringify({ message: 'purchase succesfully' }));
         }
         catch (error) {
             errorHandler(req, res, 500, 'Internal server error');
@@ -205,19 +214,21 @@ export const hack = async (req, res) => {
     const cookie = parseCookies(req);
     const decryptedUserId = getUserFromToken(cookie.token);
     try {
-        const allUsers = await getData('users.json');
-        const isUserIndex = allUsers.findIndex((user) => {
+        const { rows } = await pool.query('SELECT * FROM public.users');
+        const users = rows;
+        const isUserIndex = users.findIndex((user) => {
             return user.id == decryptedUserId;
         });
         if (isUserIndex === -1) {
             errorHandler(req, res, 404, 'User not found');
             return;
         }
-        allUsers[isUserIndex] = {
-            ...allUsers[isUserIndex],
-            balance: allUsers[isUserIndex].balance + bonus,
-        };
-        await sendData('users.json', allUsers);
+        const hackedBalance = +bonus + +users[isUserIndex].balance;
+        console.log(hackedBalance);
+        await pool.query('UPDATE public.users SET balance = $1 WHERE id = $2', [
+            hackedBalance,
+            decryptedUserId,
+        ]);
         res.setHeader('Content-Type', 'text/html');
         res.statusCode = 200;
         res.end('<h1>Hacked!</h1><p>Your balance has been updated.</p>');
