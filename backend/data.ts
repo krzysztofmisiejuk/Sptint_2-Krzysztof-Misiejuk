@@ -13,7 +13,6 @@ export const pool = new Pool({
 	database: 'workshop',
 });
 
-
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

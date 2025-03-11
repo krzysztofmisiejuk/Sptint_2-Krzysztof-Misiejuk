@@ -1,4 +1,4 @@
-import { IncomingMessage, ServerResponse } from "http";
+import { IncomingMessage, ServerResponse } from 'http';
 
 export interface User {
 	id: string;
@@ -54,5 +54,7 @@ export interface Register {
 	password: string;
 }
 
-
-export type Middelware = (req: IncomingMessage, res: ServerResponse) => void | Promise<void> 
+export type Middelware = (
+	req: IncomingMessage,
+	res: ServerResponse
+) => void | Promise<void>;

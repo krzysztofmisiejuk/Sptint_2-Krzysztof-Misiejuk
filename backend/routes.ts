@@ -66,7 +66,7 @@ export const handleRoutes = (req: IncomingMessage, res: ServerResponse) => {
 
 		if (req.url === '/profile') {
 			if (req.method === 'GET') return getProfile(req, res);
-			 return errorHandler(req, res, 405, 'Method not allowed');
+			return errorHandler(req, res, 405, 'Method not allowed');
 		}
 
 		if (req.url === '/register') {

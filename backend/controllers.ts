@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { transferData, errorHandler, findByIndex } from './utils.js';
-import { getData, pool, sendData } from './data.js';
+import { pool } from './data.js';
 import { getUserFromToken, parseCookies, refreshToken } from './auth.js';
 import {
 	AddedCar,
@@ -39,40 +39,40 @@ export const getCars = async (
 };
 
 export const getProfile = async (
-    req: IncomingMessage,
-    res: ServerResponse
+	req: IncomingMessage,
+	res: ServerResponse
 ): Promise<void> => {
-    const cookie = parseCookies(req);
-    const decryptedUserId = getUserFromToken(cookie.token);
-    if (!decryptedUserId) {
-        errorHandler(req, res, 401, 'Unauthorized');
-        return;
-    }
+	const cookie = parseCookies(req);
+	const decryptedUserId = getUserFromToken(cookie.token);
+	if (!decryptedUserId) {
+		errorHandler(req, res, 401, 'Unauthorized');
+		return;
+	}
 
-    try {
-        const { rows } = await pool.query(
-            'SELECT * FROM public.users WHERE id = $1',
-            [decryptedUserId]
-        );
-        const user: User = rows[0];
-        if (!user) {
-            errorHandler(req, res, 404, 'User not found');
-            return;
-        }
-        const currentUser: Profile = {
-            username: user.username,
-            role: user.role,
-            balance: user.balance,
-        };
-        const cookies = parseCookies(req);
-        res.setHeader('Set-Cookie', [
-            `token=${cookies.token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
-        ]);
-        res.statusCode = 200;
-        res.end(JSON.stringify(currentUser));
-    } catch (error) {
-        errorHandler(req, res, 500, 'Internal server error');
-    }
+	try {
+		const { rows } = await pool.query(
+			'SELECT * FROM public.users WHERE id = $1',
+			[decryptedUserId]
+		);
+		const user: User = rows[0];
+		if (!user) {
+			errorHandler(req, res, 404, 'User not found');
+			return;
+		}
+		const currentUser: Profile = {
+			username: user.username,
+			role: user.role,
+			balance: user.balance,
+		};
+		const cookies = parseCookies(req);
+		res.setHeader('Set-Cookie', [
+			`token=${cookies.token}; Path=/; HttpOnly; Max-Age=3600; SameSite=Strict`,
+		]);
+		res.statusCode = 200;
+		res.end(JSON.stringify(currentUser));
+	} catch (error) {
+		errorHandler(req, res, 500, 'Internal server error');
+	}
 };
 
 export const findSingleUser = async (

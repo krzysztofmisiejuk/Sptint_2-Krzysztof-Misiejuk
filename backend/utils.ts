@@ -16,7 +16,7 @@ export const findByIndex = async <T>(
 	data: T[],
 	id: string | null | undefined
 ) => {
-	const index = data.findIndex((item: any) => item?.id === id); 
+	const index = data.findIndex((item: any) => item?.id === id);
 	return { item: data[index], index };
 };
 

@@ -63,7 +63,7 @@ function renderNav() {
 async function checkAuth() {
 	try {
 		const res = await fetch(`http://localhost:3000/profile`, {
-			credentials: 'include', // Wysłanie ciasteczek
+			credentials: 'include', 
 		});
 		if (res.status === 200) {
 			const data = await res.json();
