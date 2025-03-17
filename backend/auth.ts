@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction, Router } from 'express';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import bcrypt, { hash } from 'bcrypt';
 import { pool } from './db.js';
 import { User } from './types.js';
 
@@ -61,8 +62,6 @@ export const getAuthenticatedUser = async (
 	}
 };
 
-
-
 router.post('/register', async (req: Request, res: Response) => {
 	try {
 		const { username, password } = req.body;
@@ -74,16 +73,21 @@ router.post('/register', async (req: Request, res: Response) => {
 		if (existingUsers.length > 0) {
 			return res.status(409).json({ message: 'User already exists' });
 		}
+		const hashedPassword = await bcrypt.hash(password, 12);
+
+		if (!hashedPassword) {
+			return res.status(500).json({ message: 'Error hashing password' });
+		}
 
 		const { rows } = await pool.query(
 			'INSERT INTO public.users (username, password, role, balance) VALUES ($1, $2, $3, $4) RETURNING id',
-			[username, password, 'user', 1000]
+			[username, hashedPassword, 'user', 1000]
 		);
-		const newUserId = rows[0].id;
+		const newUserId: string = rows[0].id;
 		const newUser: User = {
 			id: `user${newUserId.toString().padStart(3, '0')}`,
 			username,
-			password,
+			password: hashedPassword,
 			role: 'user',
 			balance: 1000,
 		};
@@ -98,13 +102,20 @@ router.post('/register', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
 	try {
 		const { username, password } = req.body;
-		const { rows: users } = await pool.query('SELECT * FROM public.users');
-		const user = users.find(
-			(u: User) => u.username === username && u.password === password
+		const { rows } = await pool.query(
+			'SELECT * FROM public.users WHERE username = $1',
+			[username]
 		);
+		const user: User = rows[0];
 
 		if (!user) {
-			return res.status(404).json({ error: 'Invalid data' });
+			return res.status(404).json({ error: 'Username is not exist' });
+		}
+
+		const hashedPassword = await bcrypt.compare(password, user.password);
+
+		if (!hashedPassword) {
+			return res.status(404).json({ error: 'Wrong password' });
 		}
 
 		const token = generateToken(JSON.stringify(user.id));
